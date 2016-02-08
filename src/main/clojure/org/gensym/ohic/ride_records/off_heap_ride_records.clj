@@ -2,9 +2,7 @@
   (:require
    [clojure.string :as string]
    [org.gensym.ohic.ride-records.divvy-ride-records :as records]
-   [org.gensym.ohic.util.dates :as dates]
-   [org.gensym.ohic.util.integer-ids :as ids]
-   [org.gensym.ohic.performance-tools :as perf])
+   [org.gensym.ohic.util.dates :as dates])
   (:import [sun.misc Unsafe]
            [java.io InputStream OutputStream DataInputStream DataOutputStream]
            [org.joda.time DateTime]))

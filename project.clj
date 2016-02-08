@@ -19,15 +19,16 @@
 
   :profiles { :benchmark {:main org.openjdk.jmh.Main
                           :java-source-paths ["src/main/java" "src/benchmark/java"]
+                          :source-paths ["src/main/clojure" "src/benchmark/clojure"]
                           :prep-tasks [["compile" "org.gensym.ohic.benchmark.harness"] "javac" "compile"]}
              :build-cache { :jvm-opts ["-Xmx8g"] }
              :uberjar {:aot :all}}
   :aliases {
             "make-record-cache"
-            ["with-profile" "build-cache" "trampoline" "run" "-m" "org.gensym.ohic.record-cache/make-cache"]
+            ["with-profile" "build-cache" "trampoline" "run" "-m" "org.gensym.ohic.ride-records.record-cache/make-cache"]
 
             "clean-record-cache"
-            ["trampoline" "run" "-m" "org.gensym.ohic.record-cache/clean-cache"]}
+            ["trampoline" "run" "-m" "org.gensym.ohic.ride-records.record-cache/clean-cache"]}
 
   :main ^:skip-aot org.gensym.ohic.core
   :target-path "target/%s"
