@@ -1,27 +1,35 @@
 (ns org.gensym.ohic.ride-records.divvy-ride-records
   (:require
    [clojure.string :as string]
-   [org.gensym.ohic.util.dates :as dates]
-   [org.gensym.ohic.util.performance-tools :as perf])
+   [org.gensym.ohic.util.dates :as dates])
   (:import
    [java.io BufferedReader InputStreamReader File]
    [java.util.zip ZipFile ZipEntry ZipInputStream]))
 
 (def datafile (clojure.java.io/resource "data/datachallenge.zip"))
 
-
 (def default-masseuse
-  {:stoptime (fn [v] [:stoptime (dates/from-2014-time-format v)])
-   :starttime (fn [v] [:starttime (dates/from-2014-time-format v)])
-   :usertype (fn [v] [:usertype (get {"Subscriber" "Member"} v v)])})
+  (reduce (fn [mass [key [new-key valfn]]]
+            (assoc mass key (fn [v] [new-key (valfn v)])))
+          {}
+          {:stoptime [:stop-time #(.getMillis (dates/from-2014-time-format %))]
+           :starttime [:start-time #(.getMillis (dates/from-2014-time-format %))]
+           :usertype [:user-type {"Subscriber" :member
+                                  "Member" :member
+                                  "Customer" :customer
+                                  "Dependent" :dependent}]
+           :trip-id [:trip-id read-string]
+           :from-station-id [:from-station-id (comp int read-string)]
+           :to-station-id [:to-station-id (comp int read-string)]
+           :bikeid [:bike-id (comp int read-string)]}))
 
 (def data-files
   {(clojure.java.io/resource "data/datachallenge.zip")
    [["datachallenge/Divvy_Stations_Trips_2013/Divvy_Trips_2013.csv"
      identity
      (merge default-masseuse
-            {:stoptime (fn [v] [:stoptime (dates/from-2013-time-format v)])
-             :starttime (fn [v] [:starttime (dates/from-2013-time-format v)])})]
+            {:stoptime (fn [v] [:stop-time (.getMillis (dates/from-2013-time-format v))])
+             :starttime (fn [v] [:start-time (.getMillis (dates/from-2013-time-format v))])})]
     ["datachallenge/Divvy_Stations_Trips_2014/Divvy_Stations_Trips_2014_Q1Q2/Divvy_Trips_2014_Q1Q2.csv" reverse default-masseuse]
     ["datachallenge/Divvy_Stations_Trips_2014/Divvy_Stations_Trips_2014_Q3Q4/Divvy_Trips_2014-Q3-07.csv"  reverse default-masseuse]
     ["datachallenge/Divvy_Stations_Trips_2014/Divvy_Stations_Trips_2014_Q3Q4/Divvy_Trips_2014-Q3-0809.csv" reverse default-masseuse]
@@ -39,15 +47,6 @@
                  :to-station-id
                  :usertype})
 
-;; These are properties that are known to have a finite set of values.
-;; Be specifiying them, we can potentially decrease the memory footprint
-;; of the dataset by interning their values.
-(def repeated-string-properties-masseuses
-  (reduce (fn [m v] (assoc m v (fn [x] [v (perf/string x)]))) {}
-          #{:bikeid
-            :from-station-id
-            :to-station-id
-            :usertype}))
 
 (defn massage-record [masseuse record]
   "Masseuse is a hashmap of keys to functions. Each function takes a single argument. For each key in record that has a function in masseuse, replace the the key-value pair in the record with that returned from call the function on the original value in the record."
@@ -93,9 +92,7 @@
                                    fileseqs
                                    (to-map-seq)
                                    (map (partial whitelist-record whitelist))
-                                   (map #(massage-record (merge
-                                                          repeated-string-properties-masseuses
-                                                          data-mappings) %))
+                                   (map (partial massage-record data-mappings))
                                    collection-function)]
                           recs))
                       internal-files)))
