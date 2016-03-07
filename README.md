@@ -4,7 +4,7 @@ Example source code and notes for my talk on using data in off-heap data with id
 
 The code includes examples and benchmarks of loading Divvy bikeshare ride data (https://www.divvybikes.com/data)
 
-The slides are at [presentation/index.html]
+The slides are at (presentation/index.html)
 
 ## Prerequisites
 
