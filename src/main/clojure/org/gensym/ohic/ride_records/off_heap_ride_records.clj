@@ -20,8 +20,8 @@
   ([^Unsafe unsafe object-offset]
      (.getLong unsafe (+ object-offset trip-id-offset)))
   ([record]
-     (let [^Unsafe unsafe (:unsafe record)]
-       (.getInt unsafe (+ :address record) trip-id-offset))))
+     (let [^Unsafe unsafe (unsafe record)]
+       (.getInt unsafe (+ (address record) trip-id-offset)))))
 
 (defn set-trip-id! [^Unsafe unsafe object-offset trip-id]
   (.putLong unsafe (+ object-offset trip-id-offset) trip-id))
@@ -30,8 +30,8 @@
   ([^Unsafe unsafe object-offset]
      (.getInt unsafe (+ object-offset from-station-id-offset)))
   ([record]
-     (let [^Unsafe unsafe (:unsafe record)]
-       (.getInt unsafe (+ :address record) from-station-id-offset))))
+     (let [^Unsafe unsafe (unsafe record)]
+       (.getInt unsafe (+ (address record) from-station-id-offset)))))
 
 (defn set-from-station-id! [^Unsafe unsafe object-offset station-id]
   (.putInt unsafe (+ object-offset from-station-id-offset) station-id))
@@ -40,8 +40,8 @@
   ([^Unsafe unsafe object-offset]
      (.getInt unsafe (+ object-offset to-station-id-offset)))
   ([record]
-     (let [^Unsafe unsafe (:unsafe record)]
-       (.getInt unsafe (+ :address record) to-station-id-offset))))
+     (let [^Unsafe unsafe (unsafe record)]
+       (.getInt unsafe (+ (address record) to-station-id-offset)))))
 
 (defn set-to-station-id! [^Unsafe unsafe object-offset station-id]
   (.putInt unsafe (+ object-offset to-station-id-offset) station-id))
@@ -50,8 +50,8 @@
   ([^Unsafe unsafe object-offset]
      (.getInt unsafe (+ object-offset bike-id-offset)))
   ([record]
-     (let [^Unsafe unsafe (:unsafe record)]
-       (.getInt unsafe (+ (:address record) bike-id-offset)))))
+     (let [^Unsafe unsafe (unsafe record)]
+       (.getInt unsafe (+ (address record) bike-id-offset)))))
 
 (defn set-bike-id! [^Unsafe unsafe object-offset  bike-id]
   (.putInt unsafe (+ object-offset bike-id-offset) bike-id))
@@ -60,8 +60,8 @@
   ([^Unsafe unsafe object-offset]
      (.getLong unsafe (+ object-offset start-time-offset)))
   ([record]
-     (let [^Unsafe unsafe (:unsafe record)]
-       (.getInt unsafe (+ :address record) start-time-offset))))
+     (let [^Unsafe unsafe (unsafe record)]
+       (.getInt unsafe (+ (address record) start-time-offset)))))
 
 (defn set-start-time! [^Unsafe unsafe object-offset start-time]
   (.putLong unsafe (+ object-offset start-time-offset) start-time))
@@ -70,8 +70,8 @@
   ([^Unsafe unsafe object-offset]
      (.getLong unsafe (+ object-offset stop-time-offset)))
   ([record]
-     (let [^Unsafe unsafe (:unsafe record)]
-       (.getInt unsafe (+ :address record) stop-time-offset))))
+     (let [^Unsafe unsafe (unsafe record)]
+       (.getInt unsafe (+ (address record) stop-time-offset)))))
 
 (defn set-stop-time! [^Unsafe unsafe object-offset stop-time]
   (.putLong unsafe (+ object-offset stop-time-offset) stop-time))
@@ -80,8 +80,8 @@
   ([^Unsafe unsafe object-offset]
      (.getChar unsafe (+ object-offset user-type-offset)))
   ([record]
-     (let [^Unsafe unsafe (:unsafe record)]
-       (.getInt unsafe (+ :address record) user-type-offset))))
+     (let [^Unsafe unsafe (unsafe record)]
+       (.getInt unsafe (+ (address record) user-type-offset)))))
 
 (defn set-user-type! [^Unsafe unsafe object-offset user-type]
   (.putChar unsafe (+ object-offset user-type-offset) user-type))
@@ -103,6 +103,10 @@
   (address [this]))
 
 (deftype Record [the-unsafe offset]
+  AddressableUnsafe
+  (unsafe [_] the-unsafe)
+  (address [_] offset)
+
   clojure.lang.ILookup
 
   (valAt [this key not-found]
@@ -148,11 +152,7 @@
                              :stop-time
                              :from-station-id
                              :to-station-id
-                             :user-type])))
-
-  AddressableUnsafe
-  (unsafe [_] the-unsafe)
-  (address [_] offset))
+                             :user-type]))))
 
 (defn unsafe-reduce
   ([^Unsafe unsafe address num-records f]
@@ -203,14 +203,14 @@
   Disposable
   (dispose [_] (when root? (.freeMemory unsafe address)))
 
-  clojure.core.protocols/CollReduce
-  (coll-reduce [_ f] (unsafe-reduce unsafe address num-records f))
-  (coll-reduce [_ f v] (unsafe-reduce unsafe address num-records f v))
-
   clojure.lang.Indexed
   (nth [_ i] (Record. unsafe (+ address (* i object-size)) ))
 
   (count [_] num-records)
+
+  clojure.core.protocols/CollReduce
+  (coll-reduce [_ f] (unsafe-reduce unsafe address num-records f))
+  (coll-reduce [_ f v] (unsafe-reduce unsafe address num-records f v))
 
   Serializable
   (serialize [this output-stream]

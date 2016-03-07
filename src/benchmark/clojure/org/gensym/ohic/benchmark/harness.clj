@@ -78,9 +78,11 @@
 (defn -countMinutesRidden [records station-id]
   (->>
    (:records records)
-   (filter #(or (= station-id (:from-station-id %))
-                (= station-id (:to-station-id %))))
-   (map (fn [record] (/ (- (:stop-time record) (:start-time record))
+   (filter (fn [record]
+             (or (= station-id (:from-station-id record))
+                 (= station-id (:to-station-id record)))))
+   (map (fn [record] (/ (- (:stop-time record)
+                           (:start-time record))
                         60000)))
    (reduce +)))
 
@@ -129,9 +131,11 @@
         sum
         (recur (inc i)
                (let [rec (nth coll i)]
-                 (if (or (= station-id (:from-station-id rec))
-                         (= station-id (:to-station-id rec)))
-                   (long (+ sum (/ (- (:stop-time rec) (:start-time rec)) 60000)))
+                 (if (or (= station-id (ohr/get-from-station-id rec))
+                         (= station-id (ohr/get-to-station-id rec)))
+                   (long (+ sum (/ (- (ohr/get-stop-time)
+                                      (ohr/get-start-time rec))
+                                   60000)))
                    (long sum))))))))
 
 (defn -countMinutesRiddenOffHeapNthKeyword [records station-id]
@@ -149,8 +153,9 @@
                    (long sum))))))))
 
 (defn -countMinutesRiddenOffHeapTransduce [records station-id]
-  (transduce (comp (filter  #(or (= station-id (:from-station-id %))
-                                 (= station-id (:to-station-id %))))
+  (transduce (comp (filter (fn [record]
+                             (or (= station-id (:from-station-id record))
+                                 (= station-id (:to-station-id record)))))
                    (map (fn [record] (/ (- (:stop-time record) (:start-time record))
                                         60000))))
              + 0 (:offheap records)))
