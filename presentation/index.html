@@ -1,0 +1,582 @@
+<!doctype html>
+<html lang="en">
+
+	<head>
+		<meta charset="utf-8">
+
+		<title>reveal.js – The HTML Presentation Framework</title>
+
+		<meta name="description" content="A framework for easily creating beautiful presentations using HTML">
+		<meta name="author" content="Hakim El Hattab">
+
+		<meta name="apple-mobile-web-app-capable" content="yes">
+		<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+		<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, minimal-ui">
+
+		<link rel="stylesheet" href="css/reveal.css">
+		<link rel="stylesheet" href="css/theme/black.css" id="theme">
+
+		<!-- Code syntax highlighting -->
+		<link rel="stylesheet" href="lib/css/zenburn.css">
+
+		<!-- Printing and PDF exports -->
+		<script>
+			var link = document.createElement( 'link' );
+			link.rel = 'stylesheet';
+			link.type = 'text/css';
+			link.href = window.location.search.match( /print-pdf/gi ) ? 'css/print/pdf.css' : 'css/print/paper.css';
+			document.getElementsByTagName( 'head' )[0].appendChild( link );
+		</script>
+
+		<!--[if lt IE 9]>
+		<script src="lib/js/html5shiv.js"></script>
+		<![endif]-->
+	</head>
+
+	<body>
+
+		<div class="reveal">
+
+			<!-- Any section element inside of this container is displayed as a slide -->
+			<div class="slides">
+			  <section data-markdown>
+			    <script type="text/template">
+			      ## Offheap Data in Idiomatic Clojure
+
+			      [https://github.com/gensym/offheap-clojure](https://github.com/gensym/offheap-clojure)
+			    </script>
+			  </section>
+			  <section data-markdown>
+			    <script type="text/template">
+			      ## Java heap
+
+			      * Protected
+			      * Managed (garbage collected)
+
+			    </script>
+			  </section>
+			  <section data-markdown>
+			    <script type="text/template">
+			      ## Off-heap memory
+
+			      * Unprotected (maybe)
+			      * Unmanaged
+
+			    </script>
+			  </section>
+			  <section data-markdown>
+			    <script type="text/template">
+			      ## Why?
+
+			      * Speed
+			      * Compactness
+			      * (de)Serialization
+			      * IPC
+
+			    </script>
+			  </section>
+			  <section>
+			    <section data-markdown>
+			      <script type="text/template">
+				## How?
+
+				* ByteBuffer
+				* Unsafe
+			      </script>
+			    </section>
+			    <section data-markdown>
+			      <script type="text/template">
+				## ByteBuffer
+
+				* Public API
+				* Bounds-checking
+				* Limited to 2GB each
+			      </script>
+			    </section>
+			    <section data-markdown>
+			      <script type="text/template">
+				## sun.misc.Unsafe
+
+				* Private API
+				* Uncertain future
+				* Errors can crash the JVM
+				* May be faster
+				* Can be larger than 2GB
+
+			      </script>
+			    </section>
+			  </section>
+
+			  <section>
+			    <h2>Example: Divvy Ride Data</h2>
+			    <pre><code class="clojure" data-trim contenteditable>
+{ :trip-id 4118,
+  :bikeid 480,
+  :from-station-id 85,
+  :to-station-id 28,
+  :starttime 1372353060000,
+  :stoptime 1372353360000,
+  :usertype :customer }
+
+			    </code></pre>
+			  </section>
+			  <section>
+			    <h2>Get an instance of sun.misc.Unsafe</h2>
+			    <pre><code class="clojure" data-trim contenteditable>
+(defn- getUnsafe ^Unsafe []
+  (let [f (.getDeclaredField Unsafe "theUnsafe")]
+    (.setAccessible f true)
+    (.get f nil)))
+			    </code></pre>
+			  </section>
+			  <section>
+			    <section data-markdown>
+			      <script type="text/template">
+				## Object as a collection of primitives
+
+				* byte
+				* short
+				* char
+				* int
+				* float
+				* long
+				* double
+			      </script>
+			    </section>
+			    <section>
+			      <h2>java.nio.ByteBuffer</h2>
+			      <pre><code class="java" data-trim contenteditable>
+long getLong(int index);
+long putLong(int index, long value);
+			      </code></pre>
+			    </section>
+			    <section>
+			      <h2>sun.misc.Unsafe</h2>
+			      <pre><code class="java" data-trim contenteditable>
+long getLong(Object o, int index);
+long putLong(Object o, int index, long value);
+			      </code></pre>
+			    </section>
+			  </section>
+
+			    <section>
+			      <h2>Specify object layout</h2>
+			      <pre><code class="clojure" data-trim contenteditable>
+(def trip-id-offset 0)
+(def from-station-id-offset 8)
+(def to-station-id-offset 12)
+(def bike-id-offset 16)
+(def start-time-offset 20)
+(def stop-time-offset 28)
+(def user-type-offset 36)
+(def object-size 38)
+			      </code></pre>
+			    </section>
+			    <section>
+			      <h2>Define field functions</h2>
+			      <pre><code class="clojure" data-trim contenteditable>
+(defn get-start-time [^Unsafe unsafe object-offset]
+  (.getLong unsafe (+ object-offset start-time-offset)))
+
+(defn set-start-time! [^Unsafe unsafe object-offset start-time]
+  (.putLong unsafe (+ object-offset start-time-offset) start-time))
+
+;; ...
+
+(defn get-user-type [^Unsafe unsafe object-offset]
+     (.getChar unsafe (+ object-offset user-type-offset)))
+
+(defn set-user-type! [^Unsafe unsafe object-offset user-type]
+  (.putChar unsafe (+ object-offset user-type-offset) user-type))
+
+			      </code></pre>
+			    </section>
+
+			    <section>
+			      <h2>Define the offheap structure </h2>
+			      <pre><code class="clojure" style="max-height: 600px"
+					 data-trim contenteditable>
+(defprotocol AddressableUnsafe
+  (unsafe [this])
+  (address [this]))
+
+(defprotocol Disposable (dispose [this]))
+
+(deftype RecordCollection [^Unsafe unsafe address num-records]
+
+  AddressableUnsafe
+  (unsafe [_] unsafe)
+  (address [_] address)
+
+  Disposable
+  (dispose [_] (.freeMemory unsafe address))
+
+  clojure.lange.Counted
+  (count [_] num-records))
+
+			      </code></pre>
+			    </section>
+			    <section>
+			      <h2>Build the offheap structure </h2>
+			      <pre><code class="clojure" style="max-height: 600px"  contenteditable>
+(defn make-record-collection [loaded-records]
+  (let [unsafe (getUnsafe)
+        num-records (count loaded-records)
+        required-size  (* object-size num-records)
+        address  (.allocateMemory unsafe required-size)]
+    (try
+      (loop [idx 0
+             records loaded-records
+             offset address]
+        (if (empty? records)
+          (RecordCollection. unsafe address num-records)
+          (do (set-record-fields! unsafe offset (first records))
+              (recur (inc idx)
+                     (next records)
+                     (long (+ offset object-size))))))
+
+      (catch Throwable t
+        (do
+          (.freeMemory unsafe address)
+          (throw t))))))
+			      </code></pre>
+			    </section>
+			    <section>
+			      <h2>Build the offheap structure (continued)</h2>
+			      <pre><code class="clojure" style="max-height:600px"  contenteditable>
+(defn set-record-fields! [^Unsafe unsafe offset record]
+  (try
+    (set-trip-id! unsafe offset (:trip-id record))
+    (set-from-station-id! unsafe offset (:from-station-id record))
+    (set-to-station-id! unsafe offset (:to-station-id record))
+    (set-bike-id! unsafe offset (:bike-id record))
+    (set-start-time! unsafe offset (:start-time record))
+    (set-stop-time! unsafe offset (:stop-time record))
+    (set-user-type! unsafe offset
+                    (user-type-&gt;id(:user-type record)))
+    (catch Exception e
+      (throw (RuntimeException.
+              (str "Failed parsing record " idx " (" record ")")
+              e)))))
+
+			      </code></pre>
+			    </section>
+
+			    <section>
+			      <h2>Example: Divvy Ride Data</h2>
+
+			      How many minutes did riders spend going to or from a given station?
+
+			      <pre><code class="clojure" data-trim contenteditable>
+(-&gt;&gt; records
+     (filter (fn [record]
+               (or (= station-id (:from-station-id record))
+                   (= station-id (:to-station-id record)))))
+     (map (fn [record] (/ (- (:stop-time record)
+                             (:start-time record))
+                          60000)))
+     (reduce +))
+			      </code></pre>
+			    </section>
+			    <section>
+			      <h2>In looped form</h2>
+			      <pre><code class="clojure" data-trim contenteditable>
+(loop [coll (:records records)
+       sum 0]
+  (if (empty? coll)
+    sum
+    (recur (rest coll)
+           (let [rec (first coll)]
+             (if (or (= station-id (:from-station-id rec))
+                     (= station-id (:to-station-id rec)))
+               (long (+ sum
+                        (/ (- (:stop-time rec)
+                              (:start-time rec))
+                           60000)))
+               (long sum))))))
+			      </code></pre>
+			    </section>
+			    <section>
+			      <h2>Using offheap records</h2>
+			      <pre><code class="clojure" style="max-height:600px"
+					 data-trim contenteditable>
+(let [num-records (count offheap-records)
+      unsafe (ohr/unsafe offheap-records)
+      s ohr/object-size]
+  (loop [i 0
+         offset (ohr/address offheap-records)
+         sum 0]
+    (if (= i num-records)
+      sum
+      (recur (inc i)
+             (+ offset s)
+             (if (or (= station-id
+                        (ohr/get-from-station-id unsafe offset))
+                     (= station-id
+                        (ohr/get-to-station-id unsafe offset)))
+               (long (+ sum
+                        (/ (- (ohr/get-stop-time unsafe offset)
+                              (ohr/get-start-time unsafe offset))
+                           60000)))
+               (long sum))))))
+			      </code></pre>
+			    </section>
+			    <section>
+			      <h2>Define a Record type</h2>
+
+			      <pre><code class="clojure" style="max-height:600px"
+					 data-trim contenteditable>
+(deftype Record [the-unsafe offset]
+  AddressableUnsafe
+  (unsafe [_] the-unsafe)
+  (address [_] offset))
+			      </code></pre>
+			    </section>
+			    <section>
+			      <h2>Define Record type getters</h2>
+
+			      <pre><code class="clojure" style="max-height:600px"
+					 data-trim contenteditable>
+(defn get-from-station-id [^Unsafe unsafe object-offset]
+  (.getInt unsafe (+ object-offset from-station-id-offset)))
+			      </code></pre>
+
+			      <p> becomes </p>
+
+			      <pre><code class="clojure" style="max-height:600px"
+					 data-trim contenteditable>
+(defn get-from-station-id [record]
+  (let [^Unsafe unsafe (unsafe record)]
+    (.getInt unsafe (+ (address record) from-station-id-offset))))
+			      </code></pre>
+			    </section>
+
+			    <section>
+			      <h2>Make RecordCollection indexed </h2>
+
+			      <pre><code class="clojure" style="max-height:600px"
+					 data-trim contenteditable>
+(deftype RecordCollection [^Unsafe unsafe address num-records]
+
+  AddressableUnsafe
+  (unsafe [_] unsafe)
+  (address [_] address)
+
+  Disposable
+  (dispose [_] (when root? (.freeMemory unsafe address)))
+
+  clojure.lang.Indexed
+  (nth [_ i] (Record. unsafe (+ address (* i object-size))))
+  (count [_] num-records))
+			      </code></pre>
+			    </section>
+
+
+			    <section>
+			      <h2>The loop can now use nth </h2>
+
+			      <pre><code class="clojure" style="max-height:600px"
+					 data-trim contenteditable>
+(let [num-records (count offheap-records)
+      coll offheap-records]
+  (loop [i 0
+         sum 0]
+    (if (= i num-records)
+      sum
+      (recur (inc i)
+             (let [rec (nth coll i)]
+               (if (or (= station-id (ohr/get-from-station-id rec))
+                       (= station-id (ohr/get-to-station-id rec)))
+                 (long (+ sum (/ (- (ohr/get-stop-time)
+                                    (ohr/get-start-time rec))
+                                 60000)))
+                 (long sum)))))))
+			      </code></pre>
+			    </section>
+			    <section>
+			      <h2>Make Record implement ILookup </h2>
+
+			      <pre><code class="clojure" style="max-height:600px"
+					 data-trim contenteditable>
+(deftype Record [the-unsafe offset]
+
+  AddressableUnsafe
+
+  (unsafe [_] the-unsafe)
+  (address [_] offset)
+
+  clojure.lang.ILookup
+
+  (valAt [this key not-found]
+    (case key
+      :bike-id (get-bike-id the-unsafe offset)
+      :from-station-id (get-from-station-id the-unsafe offset)
+      :to-station-id (get-to-station-id the-unsafe offset)
+      :start-time (get-start-time the-unsafe offset)
+      :stop-time (get-stop-time the-unsafe offset)
+      :user-type (id->user-type (get-user-type the-unsafe offset))
+      not-found))
+
+  (valAt [this key] (.valAt this key nil)))
+			      </code></pre>
+			    </section>
+			    <section>
+			      <h2>Keywords lookup Record fields </h2>
+
+			      <pre><code class="clojure" style="max-height:600px"
+					 data-trim contenteditable>
+(let [num-records (count offheap-records)
+      coll offheap-records]
+  (loop [i 0
+         sum 0]
+    (if (= i num-records)
+      sum
+      (recur (inc i)
+             (let [rec (nth coll i)]
+               (if (or (= station-id (:from-station-id rec))
+                       (= station-id (:to-station-id rec)))
+                 (long (+ sum
+                          (/ (- (:stop-time rec)
+                                (:start-time rec))
+                             60000)))
+                 (long sum)))))))
+			      </code></pre>
+			    </section>
+
+			    <section>
+			      <h2>Implement CollReduce </h2>
+
+			      <pre><code class="clojure" style="max-height:600px"
+					 data-trim contenteditable>
+(deftype RecordCollection [^Unsafe unsafe address num-records root?]
+
+  ;; ...
+
+  clojure.core.protocols/CollReduce
+
+  (coll-reduce [_ f]
+    (unsafe-reduce unsafe address num-records f))
+
+  (coll-reduce [_ f v]
+    (unsafe-reduce unsafe address num-records f v)))
+			      </code></pre>
+			    </section>
+
+			    <section>
+			      <h2>Implement CollReduce (cont.) </h2>
+
+			      <pre><code class="clojure" style="max-height:600px"
+					 data-trim contenteditable>
+(defn unsafe-reduce
+  ([^Unsafe unsafe address num-records f]
+     ;; ...
+     )
+  ([^Unsafe unsafe address num-records f v]
+     (loop [i 0
+            offset address
+            ret v]
+       (if (= i num-records)
+         ret
+         (let [ret (f ret (Record. unsafe offset))]
+           (if (reduced? ret)
+             @ret
+             (recur (inc i) (+ offset object-size) ret)))))))
+			      </code></pre>
+			    </section>
+
+			    <section>
+			      <h2>Implement CollReduce (cont.) </h2>
+
+			      <pre><code class="clojure" style="max-height:600px"
+					 data-trim contenteditable>
+(defn unsafe-reduce
+  ([^Unsafe unsafe address num-records f]
+     (if (= 0 num-records)
+       (f)
+       (loop [i 1
+              offset address
+              ret (f (Record. unsafe offset))]
+         (if (= i num-records)
+           ret
+           (let [offset (+ offset object-size)
+                 ret (f ret (Record. unsafe offset))]
+             (if (reduced? ret)
+               @ret
+               (recur (inc i) offset ret)))))))
+  ([^Unsafe unsafe address num-records f v]
+     ;; ...
+     ))
+			      </code></pre>
+			    </section>
+
+			    <section>
+			      <h2>Using transduce </h2>
+
+			      <pre><code class="clojure" style="max-height:600px"
+					 data-trim contenteditable>
+(transduce (comp
+            (filter (fn [record]
+                      (or (= station-id (:from-station-id record))
+                          (= station-id (:to-station-id record)))))
+            (map (fn [record]
+                   (/ (- (:stop-time record)
+                         (:start-time record))
+                      60000))))
+           + 0 records)
+			      </code></pre>
+			    </section>
+
+			    <section data-markdown>
+			    <script type="text/template">
+			      ### Next steps
+
+			      * Exploiting the sort<small>*</small>
+			      * Serializiation<small>*</small>
+			      * Handling strings
+			      * Memory layout declaration
+
+			      <small>* Example implemented in Github repo</small>
+
+			    </script>
+			  </section>
+			    <section data-markdown>
+			    <script type="text/template">
+			      ### For source code, additional examples, benchmarks, and references:
+
+			      [https://github.com/gensym/offheap-clojure](https://github.com/gensym/offheap-clojure)
+			    </script>
+			  </section>
+
+			</div>
+
+		</div>
+
+		<script src="lib/js/head.min.js"></script>
+		<script src="js/reveal.js"></script>
+
+		<script>
+
+			// Full list of configuration options available at:
+			// https://github.com/hakimel/reveal.js#configuration
+			Reveal.initialize({
+				controls: true,
+				progress: true,
+				history: true,
+				center: true,
+
+				transition: 'slide', // none/fade/slide/convex/concave/zoom
+
+				// Optional reveal.js plugins
+				dependencies: [
+					{ src: 'lib/js/classList.js', condition: function() { return !document.body.classList; } },
+					{ src: 'plugin/markdown/marked.js', condition: function() { return !!document.querySelector( '[data-markdown]' ); } },
+					{ src: 'plugin/markdown/markdown.js', condition: function() { return !!document.querySelector( '[data-markdown]' ); } },
+					{ src: 'plugin/highlight/highlight.js', async: true, callback: function() { hljs.initHighlightingOnLoad(); } }
+				]
+			});
+
+		</script>
+
+	</body>
+</html>
