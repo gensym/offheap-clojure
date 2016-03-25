@@ -69,8 +69,8 @@
 			    <script type="text/template">
 			      ## Why?
 
-			      * Speed
 			      * Compactness
+			      * Speed
 			      * (de)Serialization
 			      * IPC
 
@@ -212,7 +212,7 @@ long putLong(Object o, int index, long value);
   Disposable
   (dispose [_] (.freeMemory unsafe address))
 
-  clojure.lange.Counted
+  clojure.lang.Counted
   (count [_] num-records))
 
 			      </code></pre>
@@ -226,14 +226,12 @@ long putLong(Object o, int index, long value);
         required-size  (* object-size num-records)
         address  (.allocateMemory unsafe required-size)]
     (try
-      (loop [idx 0
-             records loaded-records
+      (loop [records loaded-records
              offset address]
         (if (empty? records)
           (RecordCollection. unsafe address num-records)
           (do (set-record-fields! unsafe offset (first records))
-              (recur (inc idx)
-                     (next records)
+              (recur (next records)
                      (long (+ offset object-size))))))
 
       (catch Throwable t
@@ -282,7 +280,7 @@ long putLong(Object o, int index, long value);
 			    <section>
 			      <h2>In looped form</h2>
 			      <pre><code class="clojure" data-trim contenteditable>
-(loop [coll (:records records)
+(loop [coll records
        sum 0]
   (if (empty? coll)
     sum
@@ -494,16 +492,20 @@ long putLong(Object o, int index, long value);
   ([^Unsafe unsafe address num-records f]
      (if (= 0 num-records)
        (f)
-       (loop [i 1
-              offset address
-              ret (f (Record. unsafe offset))]
-         (if (= i num-records)
-           ret
-           (let [offset (+ offset object-size)
-                 ret (f ret (Record. unsafe offset))]
-             (if (reduced? ret)
-               @ret
-               (recur (inc i) offset ret)))))))
+       (let [init (f (Record. unsafe address))]
+         (if (reduced? init)
+           @init
+           (loop [i 1
+                  offset (+ address object-size)
+                  ret init]
+             (if (= i num-records)
+               ret
+               (let [ret (f ret (Record. unsafe offset))]
+                 (if (reduced? ret)
+                   @ret
+                   (recur (inc i)
+                          (+ offset object-size)
+                          ret)))))))))
   ([^Unsafe unsafe address num-records f v]
      ;; ...
      ))

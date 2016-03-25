@@ -16,6 +16,10 @@
 (def user-type-offset 36)
 (def object-size 38)
 
+(defprotocol AddressableUnsafe
+  (unsafe [this])
+  (address [this]))
+
 (defn get-trip-id
   ([^Unsafe unsafe object-offset]
      (.getLong unsafe (+ object-offset trip-id-offset)))
@@ -98,10 +102,6 @@
                     \M :member
                     \D :dependent})
 
-(defprotocol AddressableUnsafe
-  (unsafe [this])
-  (address [this]))
-
 (deftype Record [the-unsafe offset]
   AddressableUnsafe
   (unsafe [_] the-unsafe)
@@ -111,6 +111,7 @@
 
   (valAt [this key not-found]
     (case key
+      :trip-id (get-trip-id the-unsafe offset)
       :bike-id (get-bike-id the-unsafe offset)
       :from-station-id (get-from-station-id the-unsafe offset)
       :to-station-id (get-to-station-id the-unsafe offset)
@@ -158,16 +159,18 @@
   ([^Unsafe unsafe address num-records f]
      (if (= 0 num-records)
        (f)
-       (loop [i 1
-              offset address
-              ret (f (Record. unsafe offset))]
-         (if (= i num-records)
-           ret
-           (let [offset (+ offset object-size)
-                 ret (f ret (Record. unsafe offset))]
-             (if (reduced? ret)
-               @ret
-               (recur (inc i) offset ret)))))))
+       (let [init (f (Record. unsafe address))]
+         (if (reduced? init)
+           @init
+           (loop [i 1
+                  offset (+ address object-size)
+                  ret init]
+             (if (= i num-records)
+               ret
+               (let [ret (f ret (Record. unsafe offset))]
+                 (if (reduced? ret)
+                   @ret
+                   (recur (inc i) (+ offset object-size) ret)))))))))
   ([^Unsafe unsafe address num-records f v]
      (loop [i 0
             offset address

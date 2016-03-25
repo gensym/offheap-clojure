@@ -20,6 +20,10 @@ This repo includes the raw Divvy ride data as distributed by Divvy. It works wit
 
 > lein with-profile benchmark run
 
+## To run the tests
+
+> lein test
+
 ## References
   * [Compact Off-Heap Structures/Tuples In Java](http://mechanical-sympathy.blogspot.com/2012/10/compact-off-heap-structurestuples-in.html)
   * [Transducers Are Coming](http://blog.cognitect.com/blog/2014/8/6/transducers-are-coming)
