@@ -4,10 +4,7 @@
 	<head>
 		<meta charset="utf-8">
 
-		<title>reveal.js – The HTML Presentation Framework</title>
-
-		<meta name="description" content="A framework for easily creating beautiful presentations using HTML">
-		<meta name="author" content="Hakim El Hattab">
+		<title>Offheap Data in Idiomatic Clojure</title>
 
 		<meta name="apple-mobile-web-app-capable" content="yes">
 		<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -122,40 +119,61 @@
 			    </code></pre>
 			  </section>
 			  <section>
-			    <h2>Get an instance of sun.misc.Unsafe</h2>
-			    <pre><code class="clojure" data-trim contenteditable>
-(defn- getUnsafe ^Unsafe []
-  (let [f (.getDeclaredField Unsafe "theUnsafe")]
-    (.setAccessible f true)
-    (.get f nil)))
-			    </code></pre>
-			  </section>
-			  <section>
-			    <section data-markdown>
-			      <script type="text/template">
-				## Object as a collection of primitives
-
-				* byte
-				* short
-				* char
-				* int
-				* float
-				* long
-				* double
-			      </script>
+			    <section>
+			      <h2>Object as a collection of primitives</h2>
+			      <table>
+				<thead><tr><th>Type</th><th>Size</th></tr></thead>
+				<tbody>
+				  <tr>
+				    <td>byte</td><td>1</td>
+				  </tr>
+				  <tr>
+				    <td>short</td><td>2</td>
+				  </tr>
+				  <tr>
+				    <td>char</td><td>2</td>
+				  </tr>
+				  <tr>
+				    <td>int</td><td>4</td>
+				  </tr>
+				  <tr>
+				    <td>float</td><td>4</td>
+				  </tr>
+				  <tr>
+				    <td>long</td><td>8</td>
+				  </tr>
+				  <tr>
+				    <td>double</td><td>8</td>
+				  </tr>
+				</tbody>
+			      </table>
 			    </section>
 			    <section>
-			      <h2>java.nio.ByteBuffer</h2>
-			      <pre><code class="java" data-trim contenteditable>
+			    <h2>java.nio.ByteBuffer</h2>
+			    <pre><code class="java" data-trim contenteditable>
 long getLong(int index);
-long putLong(int index, long value);
+ByteBuffer putLong(int index, long value);
+
+// ...
+
+float getFloat(int index);
+ByteBuffer putFloat(int index, float value);
+
+
 			      </code></pre>
 			    </section>
 			    <section>
 			      <h2>sun.misc.Unsafe</h2>
 			      <pre><code class="java" data-trim contenteditable>
-long getLong(Object o, int index);
-long putLong(Object o, int index, long value);
+long getLong(Object o, long offset);
+void putLong(Object o, long offset, long value);
+
+// ...
+
+float getFloat(Object o, long offset);
+void putFloat(Object o, long offset, float value);
+
+
 			      </code></pre>
 			    </section>
 			  </section>
@@ -217,6 +235,15 @@ long putLong(Object o, int index, long value);
 
 			      </code></pre>
 			    </section>
+			  <section>
+			    <h2>Get an instance of sun.misc.Unsafe</h2>
+			    <pre><code class="clojure" data-trim contenteditable>
+(defn- getUnsafe ^Unsafe []
+  (let [f (.getDeclaredField Unsafe "theUnsafe")]
+    (.setAccessible f true)
+    (.get f nil)))
+			    </code></pre>
+			  </section>
 			    <section>
 			      <h2>Build the offheap structure </h2>
 			      <pre><code class="clojure" style="max-height: 600px"  contenteditable>
