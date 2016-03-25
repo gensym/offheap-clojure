@@ -29,6 +29,7 @@ This repo includes the raw Divvy ride data as distributed by Divvy. It works wit
   * [Transducers Are Coming](http://blog.cognitect.com/blog/2014/8/6/transducers-are-coming)
   * [What Every Programmer Should Know About Memory](https://www.akkadia.org/drepper/cpumemory.pdf)
   * [JMH](http://openjdk.java.net/projects/code-tools/jmh/)
+  * [Byte Buffers and Non-Heap Memory](http://www.kdgregory.com/?page=java.byteBuffer)
 
 ## License
 
