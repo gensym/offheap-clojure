@@ -17,9 +17,11 @@
              #^{:static true} [unloadRecords [Object] Object]
              ])
   (:import [org.joda.time Interval DateTime])
-  (:require [org.gensym.ohic.ride-records.divvy-ride-records :as records]
-            [org.gensym.ohic.ride-records.off-heap-ride-records :as ohr]
-            [org.gensym.ohic.ride-records.record-cache :as cache]))
+  (:require
+   [org.gensym.ohic.ride-records.examples :as ex]
+   [org.gensym.ohic.ride-records.off-heap-ride-records :as ohr]
+   [org.gensym.ohic.ride-records.divvy-ride-records :as records]
+   [org.gensym.ohic.ride-records.record-cache :as cache]))
 
 (set! *warn-on-reflection* true)
 
@@ -36,127 +38,38 @@
   (ohr/dispose (:offheap records)))
 
 (defn -countUniqueBikes [records]
-  (loop [i 0
-         coll (:records records)
-         ids #{}]
-    (if (empty? coll)
-      (count ids)
-      (recur (inc i)
-             (rest coll)
-             (conj ids (:bike-id (first coll)))))))
+  (ex/count-unique-bikes (:records records)))
 
 (defn -countUniqueBikesTransduce [records]
-  (count (transduce  (map :bike-id) conj #{} (:records records))))
+  (ex/count-unique-bikes-transduce (:records records)))
 
 (defn -countUniqueBikesOffHeap [records]
-  (let [num-records (count (:offheap records))
-        unsafe (ohr/unsafe (:offheap records))
-        s ohr/object-size]
-    (loop [i 0
-           offset (ohr/address (:offheap records))
-           ids #{}]
-      (if (= i num-records)
-        (count ids)
-        (recur (inc i)
-               (+ offset ohr/object-size)
-               (conj ids (ohr/get-bike-id unsafe offset)))))))
+  (ex/count-unique-bikes-off-heap (:offheap records)))
 
 (defn -countUniqueBikesOffHeapNth [records]
-  (let [num-records (count (:offheap records))
-        coll (:offheap records)]
-    (loop [i 0
-           ids #{}]
-      (if (= i num-records)
-        (count ids)
-        (let [record (nth coll i)]
-          (recur (inc i)
-                 (conj ids (ohr/get-bike-id record))))))))
+  (ex/count-unique-bikes-off-heap-nth (:offheap records)))
 
 (defn -countUniqueBikesOffHeapTransduce [records]
-  (count (transduce (map :bike-id) conj #{} (:offheap records))))
+  (ex/count-unique-bikes-off-heap-transduce (:offheap records)))
 
 (defn -countMinutesRidden [records station-id]
-  (->>
-   (:records records)
-   (filter (fn [record]
-             (or (= station-id (:from-station-id record))
-                 (= station-id (:to-station-id record)))))
-   (map (fn [record] (/ (- (:stop-time record)
-                           (:start-time record))
-                        60000)))
-   (reduce +)))
+  (ex/count-minutes-ridden (:records records) station-id))
 
 (defn -countMinutesRiddenLoop [records station-id]
-  (loop [coll (:records records)
-         sum 0]
-    (if (empty? coll)
-      sum
-      (recur (rest coll)
-             (let [rec (first coll)]
-               (if (or (= station-id (:from-station-id rec))
-                       (= station-id (:to-station-id rec)))
-                 (long (+ sum (/ (- (:stop-time rec) (:start-time rec)) 60000)))
-                 (long sum)))))))
+  (ex/count-minutes-ridden-loop (:records records) station-id))
 
 (defn -countMinutesRiddenTransduce [records station-id]
-  (transduce (comp (filter  #(or (= station-id (:from-station-id %))
-                                 (= station-id (:to-station-id %))))
-                   (map (fn [record] (/ (- (:stop-time record) (:start-time record))
-                                        60000))))
-             + 0 (:records records)))
+  (ex/count-minutes-ridden-transduce (:records records) station-id))
 
 (defn -countMinutesRiddenOffHeap [records station-id]
-  (let [num-records (count (:offheap records))
-        unsafe (ohr/unsafe (:offheap records))
-        s ohr/object-size]
-    (loop [i 0
-           offset (ohr/address (:offheap records))
-           sum 0]
-      (if (= i num-records)
-        sum
-        (recur (inc i)
-               (+ offset s)
-               (if (or (= station-id (ohr/get-from-station-id unsafe offset))
-                       (= station-id (ohr/get-to-station-id unsafe offset)))
-                 (long (+ sum (/ (- (ohr/get-stop-time unsafe offset)
-                                    (ohr/get-start-time unsafe offset)) 60000)))
-                 (long sum)))))))
+  (ex/count-minutes-ridden-off-heap (:offheap records) station-id))
 
 (defn -countMinutesRiddenOffHeapNth [records station-id]
-  (let [num-records (count (:offheap records))
-        coll (:offheap records)]
-    (loop [i 0
-           sum 0]
-      (if (= i num-records)
-        sum
-        (recur (inc i)
-               (let [rec (nth coll i)]
-                 (if (or (= station-id (ohr/get-from-station-id rec))
-                         (= station-id (ohr/get-to-station-id rec)))
-                   (long (+ sum (/ (- (ohr/get-stop-time)
-                                      (ohr/get-start-time rec))
-                                   60000)))
-                   (long sum))))))))
+  (ex/count-minutes-ridden-off-heap-nth (:offheap records) station-id))
 
 (defn -countMinutesRiddenOffHeapNthKeyword [records station-id]
-  (let [num-records (count (:offheap records))
-        coll (:offheap records)]
-    (loop [i 0
-           sum 0]
-      (if (= i num-records)
-        sum
-        (recur (inc i)
-               (let [rec (nth coll i)]
-                 (if (or (= station-id (:from-station-id rec))
-                         (= station-id (:to-station-id rec)))
-                   (long (+ sum (/ (- (:stop-time rec) (:start-time rec)) 60000)))
-                   (long sum))))))))
+  (ex/count-minutes-ridden-off-heap-nth-keyword (:offheap records) station-id))
 
 (defn -countMinutesRiddenOffHeapTransduce [records station-id]
-  (transduce (comp (filter (fn [record]
-                             (or (= station-id (:from-station-id record))
-                                 (= station-id (:to-station-id record)))))
-                   (map (fn [record] (/ (- (:stop-time record) (:start-time record))
-                                        60000))))
-             + 0 (:offheap records)))
+  (ex/count-minutes-ridden-off-heap-transduce (:offheap records) station-id))
 
