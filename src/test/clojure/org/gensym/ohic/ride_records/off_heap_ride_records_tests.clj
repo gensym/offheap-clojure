@@ -65,5 +65,6 @@
                          ([m] :init))
                        record-collection)))))
   (testing "reducible should work for empty collection"
-    (is (= :reduced (reduce (fn [] :reduced)  (recs/make-record-collection []))))))
+    (is (= :reduced (reduce (fn [] :reduced)  (recs/make-record-collection []))))
+    (is (= :reduced (reduce (fn [] (reduced :reduced))  (recs/make-record-collection []))))))
 

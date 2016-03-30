@@ -158,7 +158,10 @@
 (defn unsafe-reduce
   ([^Unsafe unsafe address num-records f]
      (if (= 0 num-records)
-       (f)
+       (let [sole-value (f)]
+         (if (reduced? sole-value)
+           @sole-value
+           sole-value))
        (let [init (f (Record. unsafe address))]
          (if (reduced? init)
            @init
